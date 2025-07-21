@@ -45,6 +45,10 @@ type Curve interface {
 	HashToG2WithDomain(data, domain []byte) G2
 	NewRandomZr(rng io.Reader) Zr
 	Rand() (io.Reader, error)
+	ZeroG1() *G1
+	NewPolynomial() *Polynomial
+	NewPolynomialDeg(d int) *Polynomial
+	NewPolynomialFromCoeffs(coeffs []*Zr) *Polynomial
 }
 
 type Zr interface {
@@ -98,4 +102,12 @@ type Gt interface {
 	ToString() string
 	Bytes() []byte
 	Exp(Zr) Gt
+}
+
+type Polynomial interface {
+	Coeffs() []*Zr
+	AppendCoeff(coeff *Zr)
+	Degree() int
+	Eval(x *Zr) *Zr
+	Clone() Polynomial
 }

@@ -395,6 +395,13 @@ func (p *Bls12_381) HashToG2WithDomain(data, domain []byte) driver.G2 {
 	return &bls12381G2{g2}
 }
 
+// func (c *Bls12_381) NewPolynomial() driver.Polynomial {
+// 	return &Polynomial{
+// 		curveID: c.CurveID(),
+// 		poly:    bls12381.NewPolynomial(),
+// 	}
+// }
+
 func (c *Bls12_381BBS) HashToG1(data []byte) driver.G1 {
 	hashFunc := func() hash.Hash {
 		// We pass a null key so error is impossible here.

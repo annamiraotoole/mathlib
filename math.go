@@ -551,3 +551,54 @@ func (c *Curve) ModMul(a1, b1, m *Zr) *Zr {
 func (c *Curve) ModNeg(a1, m *Zr) *Zr {
 	return &Zr{zr: c.c.ModNeg(a1.zr, m.zr), curveID: c.curveID}
 }
+
+func (c *Curve) ZeroG1() *G1 {
+	zero := c.GenG1.Copy()
+	zero.Sub(c.GenG1)
+	return zero
+}
+
+func (c *Curve) NewPolynomial() *Polynomial {
+	return c.NewPolynomial()
+}
+
+func (c *Curve) NewPolynomialDeg(d int) *Polynomial {
+	// should return poly with d+1 length array of coefficients
+	return c.NewPolynomialDeg(d)
+}
+
+func (c *Curve) NewPolynomialFromCoeffs(coeffs []*Zr) *Polynomial {
+	return c.NewPolynomialFromCoeffs(coeffs)
+}
+
+/*********************************************************************/
+
+type Polynomial struct {
+	curveID CurveID
+	poly    driver.Polynomial
+}
+
+func (p *Polynomial) CurveID() CurveID {
+	return p.curveID
+}
+
+// Return coefficients as an array of field elements
+func (p *Polynomial) Coeffs() []*Zr {
+	return p.poly.Coeffs()
+}
+
+func (p *Polynomial) AppendCoeff(coeff *Zr) {
+	p.poly.AppendCoeff(coeff)
+}
+
+func (p *Polynomial) Degree() int {
+	return p.poly.Degree()
+}
+
+func (p *Polynomial) Eval(x *Zr) *Zr {
+	return p.poly.Eval(x)
+}
+
+func (p *Polynomial) Clone() Polynomial {
+	return p.poly.Clone()
+}
