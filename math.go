@@ -647,6 +647,29 @@ func (p *Polynomial) Eval(x *Zr) *Zr {
 
 /*********************************************************************/
 
+type CommitmentBuilder struct {
+	bases   []*G1
+	scalars []*Zr
+}
+
+func NewCommitmentBuilder(expectedSize int) *CommitmentBuilder {
+	return &CommitmentBuilder{
+		bases:   make([]*G1, 0, expectedSize),
+		scalars: make([]*Zr, 0, expectedSize),
+	}
+}
+
+func (cb *CommitmentBuilder) Add(base *G1, scalar *Zr) {
+	cb.bases = append(cb.bases, base)
+	cb.scalars = append(cb.scalars, scalar)
+}
+
+func (cb *CommitmentBuilder) Build() *G1 {
+	return SumOfG1Products(cb.bases, cb.scalars)
+}
+
+/*********************************************************************/
+
 type ChallengeProvider interface {
 	GetChallenge() *Zr
 }
