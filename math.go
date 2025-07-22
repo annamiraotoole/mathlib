@@ -17,6 +17,7 @@ import (
 	"github.com/IBM/mathlib/driver/gurvy"
 	"github.com/IBM/mathlib/driver/kilic"
 	"github.com/pkg/errors"
+	"golang.org/x/crypto/blake2b"
 )
 
 type CurveID int
@@ -68,6 +69,7 @@ var Curves []*Curve = []*Curve{
 		G2ByteSize:           (&amcl.Fp256bn{}).G2ByteSize(),
 		CompressedG2ByteSize: (&amcl.Fp256bn{}).CompressedG2ByteSize(),
 		ScalarByteSize:       (&amcl.Fp256bn{}).ScalarByteSize(),
+		FrCompressedSize:     32,
 		curveID:              FP256BN_AMCL,
 	},
 	{
@@ -82,6 +84,7 @@ var Curves []*Curve = []*Curve{
 		G2ByteSize:           (&gurvy.Bn254{}).G2ByteSize(),
 		CompressedG2ByteSize: (&gurvy.Bn254{}).CompressedG2ByteSize(),
 		ScalarByteSize:       (&gurvy.Bn254{}).ScalarByteSize(),
+		FrCompressedSize:     32,
 		curveID:              BN254,
 	},
 	{
@@ -96,6 +99,7 @@ var Curves []*Curve = []*Curve{
 		G2ByteSize:           (&amcl.Fp256Miraclbn{}).G2ByteSize(),
 		CompressedG2ByteSize: (&amcl.Fp256Miraclbn{}).CompressedG2ByteSize(),
 		ScalarByteSize:       (&amcl.Fp256Miraclbn{}).ScalarByteSize(),
+		FrCompressedSize:     32,
 		curveID:              FP256BN_AMCL_MIRACL,
 	},
 	{
@@ -110,6 +114,7 @@ var Curves []*Curve = []*Curve{
 		G2ByteSize:           (&kilic.Bls12_381{}).G2ByteSize(),
 		CompressedG2ByteSize: (&kilic.Bls12_381{}).CompressedG2ByteSize(),
 		ScalarByteSize:       (&kilic.Bls12_381{}).ScalarByteSize(),
+		FrCompressedSize:     32,
 		curveID:              BLS12_381,
 	},
 	{
@@ -124,6 +129,7 @@ var Curves []*Curve = []*Curve{
 		G2ByteSize:           (&gurvy.Bls12_377{}).G2ByteSize(),
 		CompressedG2ByteSize: (&gurvy.Bls12_377{}).CompressedG2ByteSize(),
 		ScalarByteSize:       (&gurvy.Bls12_377{}).ScalarByteSize(),
+		FrCompressedSize:     32,
 		curveID:              BLS12_377_GURVY,
 	},
 	{
@@ -138,6 +144,7 @@ var Curves []*Curve = []*Curve{
 		G2ByteSize:           (&gurvy.Bls12_381{}).G2ByteSize(),
 		CompressedG2ByteSize: (&gurvy.Bls12_381{}).CompressedG2ByteSize(),
 		ScalarByteSize:       (&gurvy.Bls12_381{}).ScalarByteSize(),
+		FrCompressedSize:     32,
 		curveID:              BLS12_381_GURVY,
 	},
 	{
@@ -152,6 +159,7 @@ var Curves []*Curve = []*Curve{
 		G2ByteSize:           kilic.NewBls12_381BBS().G2ByteSize(),
 		CompressedG2ByteSize: kilic.NewBls12_381BBS().CompressedG2ByteSize(),
 		ScalarByteSize:       kilic.NewBls12_381BBS().ScalarByteSize(),
+		FrCompressedSize:     32,
 		curveID:              BLS12_381_BBS,
 	},
 	{
@@ -166,6 +174,7 @@ var Curves []*Curve = []*Curve{
 		G2ByteSize:           gurvy.NewBls12_381BBS().G2ByteSize(),
 		CompressedG2ByteSize: gurvy.NewBls12_381BBS().CompressedG2ByteSize(),
 		ScalarByteSize:       gurvy.NewBls12_381BBS().ScalarByteSize(),
+		FrCompressedSize:     32,
 		curveID:              BLS12_381_BBS_GURVY,
 	},
 }
@@ -248,6 +257,13 @@ func (z *Zr) Int() (int64, error) {
 	}
 
 	return int64(binary.BigEndian.Uint64(b[32-8:])), nil
+}
+
+// TODO doesn't behave as expected
+func (z *Zr) IsZero() bool {
+	zero := z.Copy()
+	zero = zero.Minus(zero)
+	return z.Equals(zero)
 }
 
 /*********************************************************************/
@@ -413,6 +429,7 @@ type Curve struct {
 	G2ByteSize           int
 	CompressedG2ByteSize int
 	ScalarByteSize       int
+	FrCompressedSize     int
 	curveID              CurveID
 }
 
@@ -559,16 +576,38 @@ func (c *Curve) ZeroG1() *G1 {
 }
 
 func (c *Curve) NewPolynomial() *Polynomial {
-	return c.NewPolynomial()
+	return &Polynomial{
+		curveID: c.curveID,
+		coeffs:  make([]*Zr, 0),
+	}
 }
 
 func (c *Curve) NewPolynomialDeg(d int) *Polynomial {
 	// should return poly with d+1 length array of coefficients
-	return c.NewPolynomialDeg(d)
+	return &Polynomial{
+		curveID: c.curveID,
+		coeffs:  make([]*Zr, d+1),
+	}
 }
 
 func (c *Curve) NewPolynomialFromCoeffs(coeffs []*Zr) *Polynomial {
-	return c.NewPolynomialFromCoeffs(coeffs)
+	return &Polynomial{
+		curveID: c.curveID,
+		coeffs:  coeffs,
+	}
+}
+
+func (c *Curve) CompareTwoPairings(p1 *G1, q1 *G2,
+	p2 *G1, q2 *G2) bool {
+
+	// DEVIATION FROM aries-bbs-go, so that this function can be used black-box
+	p2Copy := p2.Copy()
+	p2Copy.Neg()
+
+	p := c.Pairing2(q1, p1, q2, p2Copy)
+	p = c.FExp(p)
+
+	return p.IsUnity()
 }
 
 /*********************************************************************/
@@ -608,30 +647,259 @@ func (p *Polynomial) Eval(x *Zr) *Zr {
 
 /*********************************************************************/
 
-// func ZeroG1(c *Curve) *G1 {
-// 	zero := c.GenG1.Copy()
-// 	zero.Sub(c.GenG1)
-// 	return zero
-// }
+type ChallengeProvider interface {
+	GetChallenge() *Zr
+}
 
-// func NewPolynomial(c *Curve) *Polynomial {
-// 	return &Polynomial{
-// 		curveID: c.curveID,
-// 		coeffs:  make([]*Zr, 0),
-// 	}
-// }
+type GenericChallProvider struct {
+	curve      *Curve
+	commitment *G1
+	bases      []*G1
+	nonce      []byte
+}
 
-// func NewPolynomialDeg(c *Curve, d int) *Polynomial {
-// 	// should return poly with d+1 length array of coefficients
-// 	return &Polynomial{
-// 		curveID: c.curveID,
-// 		coeffs:  make([]*Zr, d+1),
-// 	}
-// }
+func (c *Curve) NewChallengeProvider(commitment *G1, bases []*G1, nonce []byte) ChallengeProvider {
+	return &GenericChallProvider{
+		curve:      c,
+		commitment: commitment,
+		bases:      bases,
+		nonce:      nonce,
+	}
+}
 
-// func NewPolynomialFromCoeffs(c *Curve, coeffs []*Zr) *Polynomial {
-// 	return &Polynomial{
-// 		curveID: c.curveID,
-// 		coeffs:  coeffs,
-// 	}
-// }
+func (p *GenericChallProvider) GetChallenge() *Zr {
+	challengeBytes := make([]byte, 0)
+	// add bytes for every base
+	for _, base := range p.bases {
+		challengeBytes = append(challengeBytes, base.Bytes()...)
+	}
+	// add bytes for commitment
+	challengeBytes = append(challengeBytes, p.commitment.Bytes()...)
+	// add bytes for nonce
+	challengeBytes = append(challengeBytes, p.curve.NonceToFrBytes(p.nonce)...)
+	// convert final challenge bytes to a field element
+	challenge := p.curve.FrFromOKM(challengeBytes)
+	return challenge
+}
+
+/*********************************************************************/
+
+func SumOfG1Products(bases []*G1, scalars []*Zr) *G1 {
+	var res *G1
+
+	for i := 0; i < len(bases); i++ {
+		b := bases[i]
+		s := scalars[i]
+
+		g := b.Mul(s.Copy())
+		if res == nil {
+			res = g
+		} else {
+			res.Add(g)
+		}
+	}
+
+	return res
+}
+
+func (c *Curve) NonceToFrBytes(nonce []byte) []byte {
+	fieldElem := c.FrFromOKM(nonce)
+	return fieldElem.Bytes()
+}
+
+func (c *Curve) FrFromOKM(message []byte) *Zr {
+	const (
+		eightBytes = 8
+		okmMiddle  = 24
+	)
+
+	// We pass a null key so error is impossible here.
+	h, _ := blake2b.New384(nil) //nolint:errcheck
+
+	// blake2b.digest() does not return an error.
+	_, _ = h.Write(message)
+	okm := h.Sum(nil)
+	emptyEightBytes := make([]byte, eightBytes)
+
+	elm := c.NewZrFromBytes(append(emptyEightBytes, okm[:okmMiddle]...))
+
+	f2192 := c.NewZrFromBytes([]byte{
+		0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1,
+		0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+		0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+		0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+	})
+
+	elm = elm.Mul(f2192)
+
+	fr := c.NewZrFromBytes(append(emptyEightBytes, okm[okmMiddle:]...))
+	elm = elm.Plus(fr)
+
+	return elm
+}
+
+/*********************************************************************/
+
+type ProofG1 struct {
+	Commitment *G1
+	Responses  []*Zr
+}
+
+func NewProofG1(commitment *G1, responses []*Zr) *ProofG1 {
+	return &ProofG1{
+		Commitment: commitment,
+		Responses:  responses,
+	}
+}
+
+func (c *Curve) StartProofG1(rng io.Reader, bases []*G1, secrets []*Zr) *ProverCommittedG1 {
+	proverCommiting := NewProverCommittingG1()
+	for _, base := range bases {
+		proverCommiting.Commit(c, rng, base)
+	}
+
+	return proverCommiting.Finish()
+}
+
+func (c *Curve) FinishProofG1(prover *ProverCommittedG1, secrets []*Zr, challProvider ChallengeProvider) *ProofG1 {
+
+	challenge := challProvider.GetChallenge()
+
+	proof := prover.GenerateProof(challenge, secrets)
+
+	return proof
+}
+
+func (c *Curve) VerifyProofG1(pg1 *ProofG1, R *G1, bases []*G1, challProvider ChallengeProvider) bool {
+
+	challenge := challProvider.GetChallenge()
+
+	points := append(bases, R)
+	scalars := append(pg1.Responses, challenge)
+
+	contribution := SumOfG1Products(points, scalars)
+	contribution.Sub(pg1.Commitment)
+
+	return contribution.IsInfinity()
+}
+
+// ToBytes converts ProofG1 to bytes.
+// Note that this doesn't encode bases, verifier should know them.
+func (pg1 *ProofG1) ToBytes() []byte {
+	bytes := make([]byte, 0)
+
+	commitmentBytes := pg1.Commitment.Compressed()
+	bytes = append(bytes, commitmentBytes...)
+
+	lenBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(lenBytes, uint32(len(pg1.Responses)))
+	bytes = append(bytes, lenBytes...)
+
+	for i := range pg1.Responses {
+		responseBytes := pg1.Responses[i].Copy().Bytes()
+		bytes = append(bytes, responseBytes...)
+	}
+
+	return bytes
+}
+
+// ParseProofG1 parses ProofG1 from bytes.
+func (c *Curve) ParseProofG1(bytes []byte) (*ProofG1, error) {
+	if len(bytes) < c.CompressedG1ByteSize+4 {
+		return nil, errors.New("invalid size of G1 signature proof")
+	}
+
+	offset := 0
+
+	commitment, err := c.NewG1FromCompressed(bytes[:c.CompressedG1ByteSize])
+	if err != nil {
+		return nil, fmt.Errorf("parse G1 point: %w", err)
+	}
+
+	offset += c.CompressedG1ByteSize
+	length := int(binary.BigEndian.Uint32(bytes[offset : offset+4]))
+	offset += 4
+
+	if len(bytes) < c.CompressedG1ByteSize+4+length*c.FrCompressedSize {
+		return nil, errors.New("invalid size of G1 signature proof")
+	}
+
+	responses := make([]*Zr, length)
+	for i := 0; i < length; i++ {
+		responses[i] = c.NewZrFromBytes(bytes[offset : offset+c.FrCompressedSize])
+		offset += c.FrCompressedSize
+	}
+
+	return NewProofG1(commitment, responses), nil
+}
+
+////////////////////////////////////////////////////////////////////////////////
+//// OLD STUFF FROM ARIES-BBS-GO, NEEDS TO BE REFACTORED
+////////////////////////////////////////////////////////////////////////////////
+
+// ProverCommittedG1 helps to generate a ProofG1.
+type ProverCommittedG1 struct {
+	Bases           []*G1
+	BlindingFactors []*Zr
+	Commitment      *G1
+}
+
+// ToBytes converts ProverCommittedG1 to bytes.
+func (g *ProverCommittedG1) ToBytes() []byte {
+	bytes := make([]byte, 0)
+
+	for _, base := range g.Bases {
+		bytes = append(bytes, base.Bytes()...)
+	}
+
+	return append(bytes, g.Commitment.Bytes()...)
+}
+
+// GenerateProof generates proof ProofG1 for all secrets.
+func (g *ProverCommittedG1) GenerateProof(challenge *Zr, secrets []*Zr) *ProofG1 {
+	responses := make([]*Zr, len(g.Bases))
+
+	for i := range g.BlindingFactors {
+		c := challenge.Mul(secrets[i])
+
+		s := g.BlindingFactors[i].Minus(c)
+		responses[i] = s
+	}
+
+	return &ProofG1{
+		Commitment: g.Commitment,
+		Responses:  responses,
+	}
+} ////////////////////////////////////////////////////////////////////////
+
+// ProverCommittingG1 is a proof of knowledge of messages in a vector commitment.
+type ProverCommittingG1 struct {
+	bases           []*G1
+	BlindingFactors []*Zr
+}
+
+// NewProverCommittingG1 creates a new ProverCommittingG1.
+func NewProverCommittingG1() *ProverCommittingG1 {
+	return &ProverCommittingG1{
+		bases:           make([]*G1, 0),
+		BlindingFactors: make([]*Zr, 0),
+	}
+}
+
+// Commit append a base point and randomly generated blinding factor.
+func (pc *ProverCommittingG1) Commit(c *Curve, rng io.Reader, base *G1) {
+	pc.bases = append(pc.bases, base)
+	r := c.NewRandomZr(rng)
+	pc.BlindingFactors = append(pc.BlindingFactors, r)
+}
+
+// Finish helps to generate ProverCommittedG1 after commitment of all base points.
+func (pc *ProverCommittingG1) Finish() *ProverCommittedG1 {
+	commitment := SumOfG1Products(pc.bases, pc.BlindingFactors)
+
+	return &ProverCommittedG1{
+		Bases:           pc.bases,
+		BlindingFactors: pc.BlindingFactors,
+		Commitment:      commitment,
+	}
+}
