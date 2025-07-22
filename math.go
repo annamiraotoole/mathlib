@@ -575,7 +575,7 @@ func (c *Curve) NewPolynomialFromCoeffs(coeffs []*Zr) *Polynomial {
 
 type Polynomial struct {
 	curveID CurveID
-	poly    driver.Polynomial
+	coeffs  []*Zr
 }
 
 func (p *Polynomial) CurveID() CurveID {
@@ -584,21 +584,54 @@ func (p *Polynomial) CurveID() CurveID {
 
 // Return coefficients as an array of field elements
 func (p *Polynomial) Coeffs() []*Zr {
-	return p.poly.Coeffs()
+	return p.coeffs
 }
 
 func (p *Polynomial) AppendCoeff(coeff *Zr) {
-	p.poly.AppendCoeff(coeff)
+	p.coeffs = append(p.coeffs, coeff)
 }
 
 func (p *Polynomial) Degree() int {
-	return p.poly.Degree()
+	return len(p.coeffs) - 1
 }
 
 func (p *Polynomial) Eval(x *Zr) *Zr {
-	return p.poly.Eval(x)
+	deg := p.Degree()
+	res := p.coeffs[deg].Copy()
+	for i := deg - 1; i >= 0; i-- {
+		res = res.Mul(x)
+		res = res.Plus(p.coeffs[i])
+	}
+
+	return res
 }
 
-func (p *Polynomial) Clone() Polynomial {
-	return p.poly.Clone()
-}
+/*********************************************************************/
+
+// func ZeroG1(c *Curve) *G1 {
+// 	zero := c.GenG1.Copy()
+// 	zero.Sub(c.GenG1)
+// 	return zero
+// }
+
+// func NewPolynomial(c *Curve) *Polynomial {
+// 	return &Polynomial{
+// 		curveID: c.curveID,
+// 		coeffs:  make([]*Zr, 0),
+// 	}
+// }
+
+// func NewPolynomialDeg(c *Curve, d int) *Polynomial {
+// 	// should return poly with d+1 length array of coefficients
+// 	return &Polynomial{
+// 		curveID: c.curveID,
+// 		coeffs:  make([]*Zr, d+1),
+// 	}
+// }
+
+// func NewPolynomialFromCoeffs(c *Curve, coeffs []*Zr) *Polynomial {
+// 	return &Polynomial{
+// 		curveID: c.curveID,
+// 		coeffs:  coeffs,
+// 	}
+// }

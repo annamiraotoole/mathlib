@@ -15,7 +15,6 @@ import (
 	"github.com/IBM/mathlib/driver/common"
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
-	poly "github.com/consensys/gnark-crypto/ecc/bls12-381/fr/polynomial"
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -199,21 +198,6 @@ func (g *bls12381Gt) ToString() string {
 func (g *bls12381Gt) Bytes() []byte {
 	raw := g.GT.Bytes()
 	return raw[:]
-}
-
-/*********************************************************************/
-
-type bls12381Polynomial struct {
-	poly.Polynomial
-}
-
-func (p *bls12381Polynomial) Coeffs() []*driver.Zr {
-	coeffs := make([]*driver.Zr, len(p.Polynomial))
-	for i, coeff := range p.Polynomial {
-		// Assuming you have a way to convert fr.Element to *driver.Zr
-		coeffs[i] = // TODO figure out how to convert fr.Element to *driver.Zr
-	}
-	return coeffs
 }
 
 /*********************************************************************/
@@ -410,13 +394,6 @@ func (p *Bls12_381) HashToG2WithDomain(data, domain []byte) driver.G2 {
 
 	return &bls12381G2{g2}
 }
-
-// func (c *Bls12_381) NewPolynomial() driver.Polynomial {
-// 	return &Polynomial{
-// 		curveID: c.CurveID(),
-// 		poly:    bls12381.NewPolynomial(),
-// 	}
-// }
 
 func (c *Bls12_381BBS) HashToG1(data []byte) driver.G1 {
 	hashFunc := func() hash.Hash {
