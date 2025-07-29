@@ -387,7 +387,7 @@ func (g *Gt) CurveID() CurveID {
 	return g.curveID
 }
 
-func (g *Gt) Equals(a *Gt) bool {
+func (g *Gt) Equals(a *Gt) bool { // ASK ALE: I think this doesn't behave properly.
 	return g.gt.Equals(a.gt)
 }
 
@@ -608,6 +608,10 @@ func (c *Curve) CompareTwoPairings(p1 *G1, q1 *G2,
 	p = c.FExp(p)
 
 	return p.IsUnity()
+}
+
+func (c *Curve) ID() CurveID {
+	return c.curveID
 }
 
 /*********************************************************************/
